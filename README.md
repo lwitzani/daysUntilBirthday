@@ -12,3 +12,6 @@
 - when setting the script up as **Widget**, use the **largest presentation mode** and **provide the parameter 'iCloud'** (without the ' ')
 - if contacts have a nickname set, the **nickname will be chosen**
 - if the name contains a space character, only the part before the first space is used (in case of a nickname like 'Julian ❤️' the name in this widget will be 'Julian')
+
+# Images & Setup
+![](setupWidget.gif)
