@@ -13,5 +13,18 @@
 - if contacts have a nickname set, the **nickname will be chosen**
 - if the name contains a space character, only the part before the first space is used (in case of a nickname like 'Julian ❤️' the name in this widget will be 'Julian')
 
-# Images & Setup
+
+# Contact Setup
+- provide all the contacts you want to see with a new date
+- give the date the label 'daysUntilBirthday'
+- an actual birthday set in the regular birthday field is not necessary
+![](contactSetup.gif)
+
+# Widget Setup
+- when using parameter iCloud the contacts are not scanned and the source at the bottom changes to 'iCloud'
 ![](setupWidget.gif)
+
+# Language
+- you can easily edit the parameter at the top of the script to show the text you like
+- example in english:
+![](fullySetupWidget.PNG)
