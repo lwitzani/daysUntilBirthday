@@ -5,6 +5,7 @@
 
 
 # How to use
+Mode 1 (default): Only chosen contacts:
 - in your contacts app, edit the contacts you want to be visible in this widget
 - you need to set up an additional 'date' field in your contact and give the date the label '**daysUntilBirthday**'
 - run the script initially in the Scriptable app to create a **json file in iCloud** containing contact information for faster access
@@ -13,8 +14,16 @@
 - if contacts have a nickname set, the **nickname will be chosen**
 - if the name contains a space character, only the part before the first space is used (in case of a nickname like 'Julian ❤️' the name in this widget will be 'Julian')
 
+Mode 2: Show all contacts with a Birthday configured
+- set the variable showAllContacts to true or provide the parameter 'showAll' in widget mode to show all contacts that have a birthday in the regular birthday field configured
 
-# Contact Setup
+iCloud-Mode:
+- set the variable useIcloud to true or provide the parameter 'iCloud' in widget mode to never recalculate which contacts are shown again
+- if false -> everytime the contacts are scanned
+- if true -> contacts are not scanned and last used contacts are used again
+
+
+# Contact Setup for the default mode 1
 - provide all the contacts you want to see with a new date
 - give the date the label 'daysUntilBirthday'
 - an actual birthday set in the regular birthday field is not necessary
@@ -25,6 +34,8 @@
 
 # Widget Setup
 - when using parameter iCloud the contacts are not scanned and the source at the bottom changes to 'iCloud'
+- when using parameter showAll (without using parameter iCloud) all contacts with birthdays are shown
+- if the last configuration was empty and next one is 'iCloud,showAll' then because of iCloud-Mode (all previous found contacts are used again) the showAll parameter will not have any effect, since the default mode is mode 1 (only show selected contacts)
 
 
 ![](setupWidget.gif)

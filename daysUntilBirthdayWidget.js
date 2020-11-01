@@ -1,10 +1,22 @@
 //////////////////////////////////
 // how to use:
+// Mode 1 (default): Only chosen contacts:
 // in your contacts app, edit the contacts you want to be visible in this widget
 // -> you need to set up an additional 'date' field in your contact and give the date the label 'daysUntilBirthday'
 // run the script initially in the Scriptable app to create a json file in iCloud containing contact information for faster access
 // when you add new contacts via the label, run the script again in the app to update the json and make the changes visible in iCloud-mode
 // when setting the script up as Widget, use the largest presentation mode and provide the parameter 'iCloud' (without the '')
+//
+// Mode 2: Show all contacts with a Birthday configured
+// set the next variable to true or provide the parameter 'showAll' in widget mode to show all contacts that have a birthday in the regular birthday field configured
+//
+let showAllContacts = false;
+//
+// iCloud-Mode:
+// set the next variable to true or provide the parameter 'iCloud' in widget mode to never recalculate which contacts are shown again
+// if false -> everytime the contacts are scanned
+// if true -> contacts are not scanned and last used contacts are used again
+let useIcloud = false;
 //////////////////////////////////
 
 // the label name you need to set in contacts on the first date field
@@ -57,6 +69,17 @@ Script.setWidget(widget);
 Script.complete();
 
 async function createWidget() {
+    // Overwrite the default values on top when running as widget
+    // working parameter examples: 'iCloud,showAll', 'showAll,iCloud', 'iCloud', 'showAll'
+    if (args.widgetParameter) {
+        if (args.widgetParameter.includes('iCloud')) {
+            useIcloud = true;
+        }
+        if (args.widgetParameter.includes('showAll')) {
+            showAllContacts = true;
+        }
+    }
+
     const widget = new ListWidget();
     let headerRow = widget.addStack();
     let headerText = headerRow.addText(daysUntilBirthdayText);
@@ -67,7 +90,7 @@ async function createWidget() {
     let dataSource = '';
 
     // enter 'iCloud' without the '' as parameter when setting up the script as a widget
-    if (args.widgetParameter && args.widgetParameter.startsWith('iCloud')) {
+    if (useIcloud) {
         dataSource = 'iCloud';
         shownCustomContacts = loadCustomContacts();
         updateCustomContacts(shownCustomContacts);
@@ -79,19 +102,40 @@ async function createWidget() {
 
         let keysForDuplicatePrevention = [];
         for (let contact of contactsInIos) {
-            // contacts need to have an additional date property named like the content of variable contactNotesKeyWord
-            if (contact.dates[0] && contact.dates[0].label.startsWith(contactNotesKeyWord)) {
-                // the shorter nickname is preferred
-                let contactsName = contact.nickname ? contact.nickname : contact.givenName;
-                // next line removes emoji that come after a space character
-                contactsName = contactsName.split(' ')[0];
-                let foundContact = new CustomContact(contactsName, calculateDaysUntil(contact.dates[0].value), dateFormatter.string(new Date(contact.dates[0].value)));
-
-                // check if already found before (in case of multiple contact containers)
-                if (!keysForDuplicatePrevention.includes(foundContact.getAsKey())) {
-                    keysForDuplicatePrevention.push(foundContact.getAsKey());
-                    shownCustomContacts.push(foundContact);
+            let dateStringToUse = null; // if set, a contact is found
+            if (showAllContacts) {
+                // Mode 2: show all contacts with a regular birthday field set
+                if (contact.isBirthdayAvailable) {
+                    dateStringToUse = contact.birthday;
                 }
+            } else {
+                // Mode 1: only show chosen contacts
+                // contacts need to have an additional date property named like the content of variable contactNotesKeyWord
+                if (contact.dates) {
+                    for (let date of contact.dates) {
+                        if (date.label.startsWith(contactNotesKeyWord)) {
+                            dateStringToUse = date.value;
+                        }
+                    }
+                }
+            }
+
+            if (!dateStringToUse) {
+                // contact should not be shown -> continue to the next contact
+                continue;
+            }
+
+            // if here: contact will be shown
+            // the shorter nickname is preferred
+            let contactsName = contact.nickname ? contact.nickname : contact.givenName;
+            // next line removes emoji that come after a space character
+            contactsName = contactsName.split(' ')[0];
+            let foundContact = new CustomContact(contactsName, calculateDaysUntil(dateStringToUse), dateFormatter.string(new Date(dateStringToUse)));
+
+            // check if already found before (in case of multiple contact containers)
+            if (!keysForDuplicatePrevention.includes(foundContact.getAsKey())) {
+                keysForDuplicatePrevention.push(foundContact.getAsKey());
+                shownCustomContacts.push(foundContact);
             }
         }
     }
@@ -159,10 +203,11 @@ function calculateDaysUntil(birthdayString) {
     let timeRemaining = parseInt((targetDate.getTime() - startDate.getTime()) / 1000);
 
     if (timeRemaining < 0) {
+        // the date was in the past -> recalculate for next year
         targetDate.setFullYear(targetDate.getFullYear() + 1);
+        timeRemaining = parseInt((targetDate.getTime() - startDate.getTime()) / 1000);
     }
 
-    timeRemaining = parseInt((targetDate.getTime() - startDate.getTime()) / 1000);
     if (timeRemaining >= 0) {
         let days = 1 + parseInt(timeRemaining / 86400);
         return parseInt(days, 10) % 365;
