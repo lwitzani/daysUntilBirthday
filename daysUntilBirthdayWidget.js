@@ -102,11 +102,12 @@ async function createWidget() {
 
         let keysForDuplicatePrevention = [];
         for (let contact of contactsInIos) {
-            let dateStringToUse = null; // if set, a contact is found
+            let dateToUse = null; // if set, a contact is found
             if (showAllContacts) {
                 // Mode 2: show all contacts with a regular birthday field set
                 if (contact.isBirthdayAvailable) {
-                    dateStringToUse = contact.birthday;
+                    dateToUse = contact.birthday;
+                    dateToUse = getFixedDate(dateToUse);
                 }
             } else {
                 // Mode 1: only show chosen contacts
@@ -114,13 +115,14 @@ async function createWidget() {
                 if (contact.dates) {
                     for (let date of contact.dates) {
                         if (date.label.startsWith(contactNotesKeyWord)) {
-                            dateStringToUse = date.value;
+                            dateToUse = date.value;
+                            dateToUse = getFixedDate(dateToUse);
                         }
                     }
                 }
             }
 
-            if (!dateStringToUse) {
+            if (!dateToUse) {
                 // contact should not be shown -> continue to the next contact
                 continue;
             }
@@ -130,7 +132,7 @@ async function createWidget() {
             let contactsName = contact.nickname ? contact.nickname : contact.givenName;
             // next line removes emoji that come after a space character
             contactsName = contactsName.split(' ')[0];
-            let foundContact = new CustomContact(contactsName, calculateDaysUntil(dateStringToUse), dateFormatter.string(new Date(dateStringToUse)));
+            let foundContact = new CustomContact(contactsName, calculateDaysUntil(dateToUse), dateFormatter.string(new Date(dateToUse)));
 
             // check if already found before (in case of multiple contact containers)
             if (!keysForDuplicatePrevention.includes(foundContact.getAsKey())) {
@@ -189,7 +191,7 @@ function addContactInfoToRow(customContact, row) {
     nameRow.font = contactNameFont;
     nameRow.textColor = fontColorWhite;
 
-    let actualText = customContact.daysUntil === 0 ? ' ' + todayText + '\n ' + customContact.date : ' ' + customContact.daysUntil + ' ' + daysText + '\n ' + customContact.date;
+    let actualText = customContact.daysUntil === 0 ? ' ' + todayText + '\n ' + customContact.date.replace('.2222', '.????') : ' ' + customContact.daysUntil + ' ' + daysText + '\n ' + customContact.date.replace('.2222', '.????');
     let daysInfoText = row.addText(actualText);
     daysInfoText.textColor = fontColorGrey;
     daysInfoText.font = smallInfoFont;
@@ -219,7 +221,9 @@ function calculateDaysUntil(birthdayString) {
 // recalculates the daysUntil value of the customContacts
 function updateCustomContacts(customContacts) {
     for (let contact of customContacts) {
-        contact.daysUntil = calculateDaysUntil(dateFormatter.date(contact.date).toString());
+        let date = dateFormatter.date(contact.date);
+        date = getFixedDate(date);
+        contact.daysUntil = calculateDaysUntil(date.toString());
     }
 }
 
@@ -253,4 +257,13 @@ function getFilePath() {
         fm.createDirectory(dirPath);
     }
     return fm.joinPath(dirPath, "customContacts.json");
+}
+
+function getFixedDate(date) {
+    if (date?.getFullYear() === 1) {
+        // crazy bug in ios contacts if no year is set...
+        date = new Date(2222, date.getMonth(), date.getDate());
+        date.setDate(date.getDate() + 2);
+    }
+    return date;
 }
