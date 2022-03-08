@@ -1,5 +1,10 @@
 //////////////////////////////////
 // how to use:
+// This script has a widget mode and an interactive mode. To activate the interactive mode set "when interacting" to "run script" within the widget configuration or start the script within the scriptable app.
+// In the interactive mode you can select which adressbooks (containers) should be used. The selection is stored in the scriptable folder:
+// !!! At first run no adressbook (container) is selected. Therefore, start from scriptable app the first time.
+const configFile = "adressBooksForBirthday.json"
+
 // Mode 1 (default): Only chosen contacts:
 // in your contacts app, edit the contacts you want to be visible in this widget
 // -> you need to set up an additional 'date' field in your contact and give the date the label 'daysUntilBirthday'
@@ -10,14 +15,21 @@
 // Mode 2: Show all contacts with a Birthday configured
 // set the next variable to true or provide the parameter 'showAll' in widget mode to show all contacts that have a birthday in the regular birthday field configured
 //
-let showAllContacts = false;
-//
+let showAllContacts = true;
+
 // iCloud-Mode:
 // set the next variable to true or provide the parameter 'iCloud' in widget mode to never recalculate which contacts are shown again
 // if false -> everytime the contacts are scanned
 // if true -> contacts are not scanned and last used contacts are used again
 let useIcloud = false;
 //////////////////////////////////
+
+const showFamilyName = true; // Show family names or first names only
+const numberOfColumns = (showFamilyName? 1 : 2);  //If family names are shown use only 1 column else use two columns
+// load the setting which adressbooks (containers) should be used.
+let allContainers = await ContactsContainer.all();
+let containers = [];// 
+let containersID = loadCustomFile(configFile);
 
 // the label name you need to set in contacts on the first date field
 const contactNotesKeyWord = 'daysUntilBirthday';
@@ -58,6 +70,15 @@ class CustomContact {
     }
 }
 
+// present a table to select the used adressbooks (containers)
+if (!config.runsInWidget) {
+   var table = new UITable();
+   table.dismissOnTap = false
+	createTable(); 
+	await table.present(); 
+	saveCustomFile(configFile, containersID)
+}
+
 
 const widget = await createWidget();
 widget.backgroundColor = new Color("#000000");
@@ -92,14 +113,17 @@ async function createWidget() {
     // enter 'iCloud' without the '' as parameter when setting up the script as a widget
     if (useIcloud) {
         dataSource = 'iCloud';
-        shownCustomContacts = loadCustomContacts();
+        shownCustomContacts = loadCustomFile("customContacts.json");
         updateCustomContacts(shownCustomContacts);
     } else {
         dataSource = 'iPhone';
 
-        let containers = await ContactsContainer.all();
+        for (let i of allContainers){
+          if (containersID.includes(i.identifier)){
+            containers.push(i)
+          }
+        }
         let contactsInIos = await Contact.all(containers);
-
         let keysForDuplicatePrevention = [];
         for (let contact of contactsInIos) {
             let dateToUse = null; // if set, a contact is found
@@ -131,7 +155,7 @@ async function createWidget() {
             // the shorter nickname is preferred
             let contactsName = contact.nickname ? contact.nickname : contact.givenName;
             // next line removes emoji that come after a space character
-            contactsName = contactsName.split(' ')[0];
+            contactsName = contactsName.split(' ')[0] + (showFamilyName? " " + contact.familyName : "");
             let foundContact = new CustomContact(contactsName, calculateDaysUntil(dateToUse), dateFormatter.string(new Date(dateToUse)));
 
             // check if already found before (in case of multiple contact containers)
@@ -148,20 +172,20 @@ async function createWidget() {
     });
 
     // write back to json in iCloud
-    saveCustomContacts(shownCustomContacts);
+    saveCustomFile("customContacts.json", shownCustomContacts);
 
     // this row consists of two customContact infos
     let currentRow;
     // counter for creating two columns and a maximum of 20 visible contacts
     let contactCounter = 0;
     for (let customContact of shownCustomContacts) {
-        if (contactCounter === 20) {
+        if (contactCounter === (10*numberOfColumns)) {
             // only the top 20 earliest birthdays are shown in the widget
             break;
         }
-        if (contactCounter % 2 === 0) {
+        if (contactCounter % numberOfColumns === 0) {
             // start a new row
-            currentRow = widget.addStack();
+             currentRow = widget.addStack();
         }
         addContactInfoToRow(customContact, currentRow);
         contactCounter++;
@@ -176,6 +200,38 @@ async function createWidget() {
     updatedAt.centerAlignText();
     return widget;
 }
+
+
+// create the table with boxes to select or unselect adressbooks (containers).
+function createTable (){
+	table.removeAllRows();
+   for (let i of allContainers){
+		let selected = (containersID.includes(i.identifier)? true : false);
+ 	  	var row = new UITableRow()// 
+	   var ticks = row.addButton( selected? "✅" : "⭕️");
+		ticks.widthWeight = 10;
+		ticks.onTap = () => {
+			i_value = i;
+//	 		yes_no_value = selected;   
+//			if (yes_no_value) {
+         if (selected) {
+				containers.splice(containers.indexOf(i_value),1)
+				containersID.splice(containersID.indexOf(i_value.identifier),1)
+				createTable();
+    
+    		} else {
+				containers.push(i);
+				containersID.push(i.identifier)
+				createTable();
+ 			}
+    	}
+		var partText = row.addText(i.name);
+		partText.widthWeight = 90;
+		table.addRow(row);     
+   }
+	table.reload();
+}
+
 
 // used to align the information
 function addSpaces(amount, row) {
@@ -193,7 +249,7 @@ function addContactInfoToRow(customContact, row) {
 
     let actualText = customContact.daysUntil === 0 ? ' ' + todayText + '\n ' + customContact.date.replace('.2222', '.????') : ' ' + customContact.daysUntil + ' ' + daysText + '\n ' + customContact.date.replace('.2222', '.????');
     let daysInfoText = row.addText(actualText);
-    daysInfoText.textColor = fontColorGrey;
+    daysInfoText.textColor =  (customContact.daysUntil === 0 ? Color.red() : fontColorGrey );
     daysInfoText.font = smallInfoFont;
 }
 
@@ -228,10 +284,10 @@ function updateCustomContacts(customContacts) {
 }
 
 // loads contacts stored in the json
-function loadCustomContacts() {
-    // this could be changed to FileManager.local() if you don't want to use iCloud
-    let fm = FileManager.iCloud();
-    let path = getFilePath();
+function loadCustomFile(fileName) {
+    // this could be changed to FileManager.iCloud() if you don't want to use iCloud
+    let fm = FileManager.local();
+    let path = getFilePath(fileName);
     if (fm.fileExists(path)) {
         let raw = fm.readString(path);
         return JSON.parse(raw);
@@ -240,23 +296,23 @@ function loadCustomContacts() {
     }
 }
 
-// Saves the CustomContacts to a file in iCloud Drive.
-function saveCustomContacts(customContacts) {
-    // this could be changed to FileManager.local() if you don't want to use iCloud
-    let fm = FileManager.iCloud();
-    let path = getFilePath();
-    let raw = JSON.stringify(customContacts);
+// Saves the files to a local file.
+function saveCustomFile(fileName, customData) {
+    // this could be changed to FileManager.local() if you don't want to save local
+    let fm = FileManager.local();
+    let path = getFilePath(fileName);
+    let raw = JSON.stringify(customData);
     fm.writeString(path, raw);
 }
 
-// Gets path of the file containing the stored CustomContact  data. Creates the file if necessary.
-function getFilePath() {
-    let fm = FileManager.iCloud();
+// Gets path of the file containing the stored data. Creates the file if necessary.
+function getFilePath(fileName) {
+    let fm = FileManager.local();
     let dirPath = fm.joinPath(fm.documentsDirectory(), "daysUntilBirthdayData");
     if (!fm.fileExists(dirPath)) {
         fm.createDirectory(dirPath);
     }
-    return fm.joinPath(dirPath, "customContacts.json");
+    return fm.joinPath(dirPath, fileName);
 }
 
 function getFixedDate(date) {
